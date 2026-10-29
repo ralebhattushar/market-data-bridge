@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from io import BytesIO
 from typing import Any
@@ -165,6 +165,7 @@ def fetch_instruments(
                     messages[index].append(f"Ticker fallback download failed: {exc}")
 
     results: list[InstrumentResult] = []
+    metadata_by_symbol: dict[str, dict[str, Any]] = {}
     for index, instrument in enumerate(instruments):
         symbol = symbols[index] or None
         prices = primary_histories.get(symbol, pd.DataFrame()) if symbol else pd.DataFrame()
@@ -187,6 +188,21 @@ def fetch_instruments(
                 f"No historical prices were returned for {symbol}."
             )
 
+        if symbol and (not instrument.exchange or not instrument.currency):
+            try:
+                cache_key = symbol.casefold()
+                if cache_key not in metadata_by_symbol:
+                    metadata_by_symbol[cache_key] = yf.Ticker(symbol).get_info()
+                metadata = metadata_by_symbol[cache_key]
+            except Exception as exc:
+                messages[index].append(f"Instrument metadata lookup failed: {exc}")
+            else:
+                instrument = replace(
+                    instrument,
+                    exchange=instrument.exchange or _metadata_text(metadata.get("exchange")),
+                    currency=instrument.currency or _metadata_text(metadata.get("currency")),
+                )
+
         results.append(
             InstrumentResult(
                 instrument=instrument,
@@ -206,6 +222,10 @@ def _has_history(prices: pd.DataFrame | None) -> bool:
         and "Close" in prices.columns
         and prices["Close"].notna().any()
     )
+
+
+def _metadata_text(value: object) -> str:
+    return value.strip() if isinstance(value, str) else ""
 
 
 def build_price_table(results: list[InstrumentResult]) -> pd.DataFrame:

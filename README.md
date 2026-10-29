@@ -5,8 +5,9 @@ A Streamlit app for downloading historical prices from Yahoo Finance using
 table, or **Upload CSV** to load a file with the columns
 `ticker`, `isin`, `exchange`, and `currency`. The app tries to resolve each ISIN
 through Yahoo Finance search first and falls back to the supplied ticker when
-lookup or price retrieval fails. Exchange and currency are retained as the
-provided metadata; they are not used to convert prices.
+lookup or price retrieval fails. Exchange and currency values supplied in the
+input are retained; when either is blank, the app uses that symbol's Yahoo
+Finance metadata when available. They are not used to convert prices.
 
 When fetching multiple instruments, the app requests their historical prices
 with a single `yfinance.download` batch wherever possible. ISIN-to-ticker

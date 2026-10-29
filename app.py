@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import date, timedelta
 
 import pandas as pd
@@ -20,10 +21,36 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+
+def _subtract_months(value: date, months: int) -> date:
+    month_index = value.year * 12 + value.month - 1 - months
+    year, month = divmod(month_index, 12)
+    day = min(value.day, monthrange(year, month + 1)[1])
+    return date(year, month + 1, day)
+
+
+def _apply_date_interval() -> None:
+    interval = st.session_state["date_interval"]
+    if interval == "Custom":
+        return
+
+    end_date = date.today()
+    if interval == "Year to date":
+        start_date = date(end_date.year, 1, 1)
+    elif "month" in interval:
+        start_date = _subtract_months(end_date, int(interval.split()[0]))
+    else:
+        start_date = _subtract_months(end_date, int(interval.split()[0]) * 12)
+    st.session_state["date_range"] = (start_date, end_date)
+
+
+def _mark_custom_date_range() -> None:
+    st.session_state["date_interval"] = "Custom"
+
+
 st.markdown(
     """
     <style>
-    .stApp { background: #f5f7fb; }
     .block-container { max-width: 1440px; padding-top: 2rem; }
     .hero {
         padding: 1.6rem 1.8rem; border-radius: 18px; margin-bottom: 1.4rem;
@@ -32,7 +59,7 @@ st.markdown(
     .hero h1 { margin: 0 0 .35rem; font-size: 2rem; }
     .hero p { margin: 0; color: #d3e2ea; font-size: 1rem; }
     [data-testid="stMetric"] {
-        background: white; border: 1px solid #e6eaf0; padding: 1rem;
+        padding: 1rem;
         border-radius: 14px;
     }
     .stButton > button[kind="primary"] {
@@ -59,12 +86,33 @@ st.markdown(
 
 with st.container(border=True):
     st.subheader("1. Choose a date range")
-    date_col, help_col = st.columns([1, 2])
+    st.session_state.setdefault(
+        "date_range", (date.today() - timedelta(days=365), date.today())
+    )
+    st.session_state.setdefault("date_interval", "1 year")
+    date_col, interval_col, help_col = st.columns([1.2, 0.8, 2])
     with date_col:
         date_range = st.date_input(
             "Historical period",
-            value=(date.today() - timedelta(days=365), date.today()),
+            key="date_range",
             max_value=date.today(),
+            on_change=_mark_custom_date_range,
+        )
+    with interval_col:
+        st.selectbox(
+            "Standard interval",
+            [
+                "Custom",
+                "1 month",
+                "3 months",
+                "6 months",
+                "Year to date",
+                "1 year",
+                "3 years",
+                "5 years",
+            ],
+            key="date_interval",
+            on_change=_apply_date_interval,
         )
     with help_col:
         st.caption(

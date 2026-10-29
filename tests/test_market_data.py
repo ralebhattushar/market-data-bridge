@@ -158,6 +158,51 @@ class MarketDataTests(unittest.TestCase):
         self.assertIn("ISIN lookup failed", result.status)
         self.assertFalse(result.prices.empty)
 
+    @patch("market_data.yf.Ticker")
+    @patch("market_data.yf.download")
+    def test_fills_missing_exchange_and_currency_from_yahoo_metadata(
+        self, download, ticker
+    ):
+        download.return_value = self.batch_history(MSFT=self.history)
+        ticker.return_value.get_info.return_value = {
+            "exchange": "NMS",
+            "currency": "USD",
+        }
+        instrument = Instrument(
+            ticker="MSFT", isin="", exchange="", currency=""
+        )
+
+        result = fetch_instruments(
+            [instrument], date(2025, 1, 1), date(2025, 1, 2)
+        )[0]
+        table = build_price_table([result])
+
+        ticker.assert_called_once_with("MSFT")
+        self.assertEqual(result.instrument.exchange, "NMS")
+        self.assertEqual(result.instrument.currency, "USD")
+        self.assertEqual(table.loc[0, "Exchange"], "NMS")
+        self.assertEqual(table.loc[0, "Currency"], "USD")
+
+    @patch("market_data.yf.Ticker")
+    @patch("market_data.yf.download")
+    def test_preserves_provided_metadata_and_keeps_prices_if_metadata_lookup_fails(
+        self, download, ticker
+    ):
+        download.return_value = self.batch_history(MSFT=self.history)
+        ticker.return_value.get_info.side_effect = RuntimeError("metadata unavailable")
+        instrument = Instrument(
+            ticker="MSFT", isin="", exchange="NASDAQ", currency=""
+        )
+
+        result = fetch_instruments(
+            [instrument], date(2025, 1, 1), date(2025, 1, 2)
+        )[0]
+
+        self.assertEqual(result.instrument.exchange, "NASDAQ")
+        self.assertEqual(result.instrument.currency, "")
+        self.assertIn("Instrument metadata lookup failed", result.status)
+        self.assertFalse(result.prices.empty)
+
     @patch("market_data.yf.Search")
     @patch("market_data.yf.download")
     def test_batches_ticker_fallback_when_isin_symbol_has_no_prices(
